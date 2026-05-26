@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AWS FinOps Optimizer · David González Rozas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:         #f5f0e8;
+      --surface:    #ffffff;
+      --surface-2:  #ede8df;
+      --border:     #d8d0c4;
+      --text:       #1a1714;
+      --muted:      #7a7068;
+      --light:      #a89f94;
+      --accent:     #1a5c3b;
+      --accent-h:   #144d31;
+      --accent-bg:  #eaf3ee;
+      --red:        #c0392b;
+      --orange:     #d97706;
+      --radius:     6px; --radius-lg: 12px;
+      --shadow:     0 2px 12px rgba(26,23,20,.09);
+      --shadow-sm:  0 1px 3px rgba(26,23,20,.07);
+      --font: 'Inter', system-ui, sans-serif;
+    }
+    html { font-size: 15px; }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+    .container { max-width: 1280px; margin: 0 auto; padding: 0 1.5rem; }
+    .hidden { display: none !important; }
+    a { text-decoration: none; color: inherit; }
+
+    /* Header */
+    .app-header {
+      background: rgba(245,240,232,.94);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .header-inner {
+      display: flex; align-items: center;
+      justify-content: space-between; height: 54px;
+    }
+    .logo { display: flex; align-items: center; gap: .75rem; }
+    .logo-brand { font-size: .95rem; font-weight: 800; letter-spacing: .1em; }
+    .logo-brand .g { color: var(--accent); }
+    .logo-sep { width: 1px; height: 18px; background: var(--border); }
+    .logo-name { font-size: .8rem; color: var(--muted); font-weight: 500; }
+    .header-nav { display: flex; gap: 1.5rem; align-items: center; }
+    .nav-link { font-size: .8rem; font-weight: 500; color: var(--muted); transition: color .15s; }
+    .nav-link:hover, .nav-link.active { color: var(--text); }
+    .nav-link-back {
+      font-size: .8rem; font-weight: 600; color: var(--accent);
+      border: 1px solid var(--accent); border-radius: var(--radius);
+      padding: .3rem .75rem; transition: background .15s;
+    }
+    .nav-link-back:hover { background: var(--accent-bg); }
+
+    /* Hero */
+    .hero {
+      padding: 2.5rem 0 2rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .hero-title { font-size: clamp(1.6rem, 3vw, 2.2rem); font-weight: 800; letter-spacing: -.03em; margin-bottom: .5rem; }
+    .hero-title .accent { color: var(--accent); }
+    .hero-sub { color: var(--muted); max-width: 540px; line-height: 1.65; margin-bottom: 1rem; font-size: .9rem; }
+    .hero-pills { display: flex; gap: .5rem; flex-wrap: wrap; }
+    .pill {
+      background: var(--accent-bg); border: 1px solid #c3dece;
+      border-radius: 20px; padding: .2rem .75rem;
+      font-size: .7rem; font-weight: 600; color: var(--accent); letter-spacing: .03em;
+    }
+
+    /* Main grid */
+    .main-grid {
+      display: grid; grid-template-columns: 400px 1fr;
+      gap: 1.5rem; padding: 1.5rem; flex: 1; align-items: start;
+    }
+    @media (max-width: 860px) { .main-grid { grid-template-columns: 1fr; } }
+
+    /* Panel */
+    .panel {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 1.5rem;
+      box-shadow: var(--shadow-sm);
+    }
+    .panel-title {
+      font-size: .9rem; font-weight: 700; margin-bottom: 1.25rem;
+      padding-bottom: .75rem; border-bottom: 1px solid var(--border);
+    }
+
+    /* Resource sections */
+    .res-section { margin-bottom: 1.25rem; }
+    .res-header { display: flex; align-items: center; gap: .5rem; margin-bottom: .75rem; }
+    .res-label {
+      font-size: .72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .08em; color: var(--accent); flex: 1;
+    }
+    .btn-add {
+      background: none; border: 1px solid var(--border);
+      color: var(--accent); border-radius: var(--radius);
+      padding: .22rem .6rem; font-size: .72rem; font-weight: 600;
+      cursor: pointer; transition: background .15s, border-color .15s;
+    }
+    .btn-add:hover { background: var(--accent-bg); border-color: var(--accent); }
+
+    /* Rows */
+    .rows-container { display: flex; flex-direction: column; gap: .5rem; }
+    .resource-row {
+      background: var(--surface-2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: .7rem;
+      display: grid; gap: .45rem;
+    }
+    .ec2-row { grid-template-columns: 1fr 52px 52px 1fr 24px; align-items: end; }
+    .ebs-row { grid-template-columns: 72px 1fr 52px 24px; align-items: end; }
+    .rds-row { grid-template-columns: 1fr 1fr 72px 24px; align-items: end; }
+    .row-field { display: flex; flex-direction: column; gap: .18rem; }
+    .row-field label { font-size: .65rem; font-weight: 600; color: var(--light); text-transform: uppercase; letter-spacing: .05em; }
+    .row-field input, .row-field select {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 4px; color: var(--text);
+      padding: .32rem .45rem; font-size: .78rem; font-family: var(--font);
+      width: 100%; appearance: none;
+    }
+    .row-field input:focus, .row-field select:focus {
+      outline: none; border-color: var(--accent);
+    }
+    .row-check {
+      display: flex; align-items: center; gap: .4rem;
+      font-size: .75rem; color: var(--muted);
+      grid-column: 1 / -2; padding-top: .1rem;
+    }
+    .row-check input { width: auto; accent-color: var(--accent); }
+    .btn-remove {
+      background: none; border: none; color: var(--light);
+      cursor: pointer; font-size: .85rem; padding: .15rem;
+      border-radius: 3px; align-self: end;
+      transition: color .15s;
+    }
+    .btn-remove:hover { color: var(--red); }
+
+    /* Actions */
+    .form-actions { display: flex; gap: .75rem; margin-top: 1.25rem; }
+    .btn-primary {
+      background: var(--accent); color: #fff; border: none;
+      border-radius: var(--radius); padding: .65rem 1.25rem;
+      font-size: .85rem; font-weight: 600; cursor: pointer; flex: 1;
+      transition: background .15s;
+    }
+    .btn-primary:hover { background: var(--accent-h); }
+    .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-secondary {
+      background: var(--surface-2); color: var(--muted);
+      border: 1px solid var(--border); border-radius: var(--radius);
+      padding: .65rem 1rem; font-size: .85rem; font-weight: 500;
+      cursor: pointer; transition: border-color .15s, color .15s;
+    }
+    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+    .error-box {
+      background: #fef2f2; border: 1px solid #fecaca;
+      border-radius: var(--radius); color: var(--red);
+      padding: .75rem 1rem; font-size: .82rem; margin-top: .75rem; line-height: 1.5;
+    }
+
+    /* Results */
+    .results-placeholder {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; min-height: 280px;
+      color: var(--light); text-align: center; gap: .75rem;
+    }
+    .placeholder-mark { font-size: 2rem; color: var(--border); }
+
+    /* KPIs */
+    .kpi-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; margin-bottom: 1.5rem; }
+    .kpi-card {
+      background: var(--surface-2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1rem; text-align: center;
+    }
+    .kpi-label { font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--light); margin-bottom: .35rem; }
+    .kpi-value { font-size: 1.5rem; font-weight: 800; letter-spacing: -.03em; }
+    .kpi-sub { font-size: .72rem; color: var(--muted); margin-top: .1rem; }
+    .kpi-current .kpi-value { color: var(--text); }
+    .kpi-optimized .kpi-value { color: var(--accent); }
+    .kpi-saving .kpi-value { color: var(--orange); }
+    .kpi-saving { border-color: #fde68a; }
+    .kpi-optimized { border-color: #c3dece; }
+
+    /* Chart */
+    .chart-wrapper {
+      background: var(--surface-2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.25rem 1rem;
+      margin-bottom: 1.5rem; max-height: 260px;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* Breakdown */
+    .section-label {
+      font-size: .68rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .08em; color: var(--muted); margin-bottom: .75rem;
+    }
+    .breakdown-section { margin-bottom: 1.5rem; }
+    .breakdown-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: .75rem; }
+    .breakdown-card {
+      background: var(--surface-2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: .75rem 1rem;
+    }
+    .b-label { font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--light); margin-bottom: .3rem; }
+    .b-value { font-size: 1.05rem; font-weight: 700; }
+
+    /* Recommendations */
+    .rec-card {
+      background: var(--surface-2); border: 1px solid var(--border);
+      border-left: 3px solid var(--border);
+      border-radius: var(--radius); padding: 1rem 1.1rem; margin-bottom: .65rem;
+    }
+    .rec-card.sev-high   { border-left-color: var(--red); }
+    .rec-card.sev-medium { border-left-color: var(--orange); }
+    .rec-card.sev-low    { border-left-color: var(--light); }
+    .rec-header { display: flex; justify-content: space-between; align-items: flex-start; gap: .75rem; margin-bottom: .4rem; }
+    .rec-title { font-size: .875rem; font-weight: 700; line-height: 1.3; }
+    .rec-saving { white-space: nowrap; font-size: .9rem; font-weight: 800; color: var(--accent); }
+    .rec-saving small { font-size: .68rem; font-weight: 400; color: var(--muted); display: block; text-align: right; }
+    .rec-desc { font-size: .78rem; color: var(--muted); line-height: 1.6; }
+    .rec-tags { display: flex; gap: .35rem; margin-top: .5rem; }
+    .rec-tag {
+      font-size: .62rem; font-weight: 700; letter-spacing: .06em;
+      text-transform: uppercase; padding: .12rem .4rem; border-radius: 3px;
+    }
+    .tag-compute    { background: #e8f4ed; color: var(--accent); }
+    .tag-storage    { background: #fef9c3; color: #854d0e; }
+    .tag-database   { background: #ede9fe; color: #6d28d9; }
+    .tag-commitment { background: #d1fae5; color: #065f46; }
+    .tag-high   { background: #fee2e2; color: var(--red); }
+    .tag-medium { background: #fef3c7; color: var(--orange); }
+    .tag-low    { background: var(--surface-2); color: var(--muted); }
+
+    .no-recs {
+      background: #eaf3ee; border: 1px solid #c3dece;
+      border-radius: var(--radius); color: var(--accent);
+      padding: .875rem 1rem; font-size: .85rem;
+    }
+
+    /* Footer */
+    .app-footer { border-top: 1px solid var(--border); padding: .875rem 0; margin-top: auto; background: var(--surface); }
+    .app-footer .container { display: flex; justify-content: space-between; flex-wrap: wrap; gap: .5rem; font-size: .7rem; color: var(--light); }
+    .app-footer a { color: var(--accent); }
+  </style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="container header-inner">
+    <div class="logo">
+      <span class="logo-brand">D<span class="g">G</span>R</span>
+      <span class="logo-sep"></span>
+      <span class="logo-name">AWS FinOps Optimizer</span>
+    </div>
+    <nav class="header-nav">
+      <a href="index.html" class="nav-link-back">← Portfolio</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="container">
+    <h1 class="hero-title">AWS Cost <span class="accent">Intelligence</span></h1>
+    <p class="hero-sub">Introduce tu infraestructura actual y obtén un análisis FinOps con recomendaciones priorizadas y el ahorro mensual potencial.</p>
+    <div class="hero-pills">
+      <span class="pill">6 Reglas FinOps</span>
+      <span class="pill">Precios reales us-east-1</span>
+      <span class="pill">Sin registro · 100% gratuito</span>
+    </div>
+  </div>
+</section>
+
+<main class="container main-grid">
+
+  <!-- Formulario -->
+  <section class="panel">
+    <h2 class="panel-title">Tu infraestructura</h2>
+
+    <div class="res-section">
+      <div class="res-header">
+        <span class="res-label">Instancias EC2</span>
+        <button class="btn-add" onclick="addEC2Row()">+ Añadir</button>
+      </div>
+      <div id="ec2-rows" class="rows-container"></div>
+    </div>
+
+    <div class="res-section">
+      <div class="res-header">
+        <span class="res-label">Almacenamiento EBS</span>
+        <button class="btn-add" onclick="addEBSRow()">+ Añadir</button>
+      </div>
+      <div id="ebs-rows" class="rows-container"></div>
+    </div>
+
+    <div class="res-section">
+      <div class="res-header">
+        <span class="res-label">Bases de datos RDS</span>
+        <button class="btn-add" onclick="addRDSRow()">+ Añadir</button>
+      </div>
+      <div id="rds-rows" class="rows-container"></div>
+    </div>
+
+    <div class="form-actions">
+      <button class="btn-secondary" onclick="loadExample()">Cargar ejemplo</button>
+      <button class="btn-primary" id="btn-analyze" onclick="runAnalysis()">
+        <span id="btn-text">Analizar infraestructura</span>
+        <span id="btn-loader" class="hidden">Calculando...</span>
+      </button>
+    </div>
+    <div id="error-box" class="error-box hidden"></div>
+  </section>
+
+  <!-- Resultados -->
+  <section class="panel" id="results-panel">
+    <div id="results-placeholder" class="results-placeholder">
+      <div class="placeholder-mark">◎</div>
+      <p>Los resultados del análisis aparecerán aquí.</p>
+    </div>
+    <div id="results-content" class="hidden">
+      <div class="kpi-grid">
+        <div class="kpi-card kpi-current">
+          <div class="kpi-label">Coste Actual</div>
+          <div class="kpi-value" id="kpi-current">—</div>
+          <div class="kpi-sub">/ mes</div>
+        </div>
+        <div class="kpi-card kpi-optimized">
+          <div class="kpi-label">Coste Optimizado</div>
+          <div class="kpi-value" id="kpi-optimized">—</div>
+          <div class="kpi-sub">/ mes</div>
+        </div>
+        <div class="kpi-card kpi-saving">
+          <div class="kpi-label">Ahorro Potencial</div>
+          <div class="kpi-value" id="kpi-saving">—</div>
+          <div class="kpi-sub" id="kpi-pct">—</div>
+        </div>
+      </div>
+      <div class="chart-wrapper"><canvas id="costChart"></canvas></div>
+      <div class="breakdown-section">
+        <div class="section-label">Desglose actual</div>
+        <div class="breakdown-grid" id="breakdown-grid"></div>
+      </div>
+      <div>
+        <div class="section-label">Recomendaciones FinOps</div>
+        <div id="rec-list"></div>
+        <div id="no-recs" class="no-recs hidden">Sin optimizaciones adicionales detectadas. Infraestructura eficiente.</div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="app-footer">
+  <div class="container">
+    <span>AWS FinOps Optimizer · David González Rozas · Precios us-east-1 On-Demand</span>
+    <span>Datos orientativos — <a href="https://aws.amazon.com/pricing" target="_blank">aws.amazon.com/pricing</a></span>
+  </div>
+</footer>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════
+// DATOS DE PRECIOS AWS (us-east-1, On-Demand)
+// ═══════════════════════════════════════════════
+const P = {
+  ec2: {
+    "t2.micro":   { h: 0.0116, cpu: 1,  ram: 1,  fam: "t2" },
+    "t2.small":   { h: 0.0230, cpu: 1,  ram: 2,  fam: "t2" },
+    "t2.medium":  { h: 0.0464, cpu: 2,  ram: 4,  fam: "t2" },
+    "t2.large":   { h: 0.0928, cpu: 2,  ram: 8,  fam: "t2" },
+    "t2.xlarge":  { h: 0.1856, cpu: 4,  ram: 16, fam: "t2" },
+    "t3.micro":   { h: 0.0104, cpu: 2,  ram: 1,  fam: "t3" },
+    "t3.small":   { h: 0.0208, cpu: 2,  ram: 2,  fam: "t3" },
+    "t3.medium":  { h: 0.0416, cpu: 2,  ram: 4,  fam: "t3" },
+    "t3.large":   { h: 0.0832, cpu: 2,  ram: 8,  fam: "t3" },
+    "t3.xlarge":  { h: 0.1664, cpu: 4,  ram: 16, fam: "t3" },
+    "m5.large":   { h: 0.0960, cpu: 2,  ram: 8,  fam: "m5" },
+    "m5.xlarge":  { h: 0.1920, cpu: 4,  ram: 16, fam: "m5" },
+    "m5.2xlarge": { h: 0.3840, cpu: 8,  ram: 32, fam: "m5" },
+    "c5.large":   { h: 0.0850, cpu: 2,  ram: 4,  fam: "c5" },
+    "c5.xlarge":  { h: 0.1700, cpu: 4,  ram: 8,  fam: "c5" },
+    "r5.large":   { h: 0.1260, cpu: 2,  ram: 16, fam: "r5" },
+    "r5.xlarge":  { h: 0.2520, cpu: 4,  ram: 32, fam: "r5" }
+  },
+  ebs: {
+    "gp2": 0.100, "gp3": 0.080,
+    "io1": 0.125, "io2": 0.125,
+    "st1": 0.045, "sc1": 0.025
+  },
+  rds: {
+    "db.t3.micro":  { s: 0.0170, m: 0.0340 },
+    "db.t3.small":  { s: 0.0340, m: 0.0680 },
+    "db.t3.medium": { s: 0.0680, m: 0.1360 },
+    "db.t3.large":  { s: 0.1360, m: 0.2720 },
+    "db.m5.large":  { s: 0.1710, m: 0.3420 },
+    "db.m5.xlarge": { s: 0.3420, m: 0.6840 }
+  },
+  rdsStorage: 0.115,
+  riDiscount: 0.30
+};
+
+const HOURS = 730;
+const EC2_TYPES = Object.keys(P.ec2);
+const EBS_TYPES = Object.keys(P.ebs);
+const RDS_TYPES = Object.keys(P.rds);
+
+// ═══════════════════════════════════════════════
+// CALCULADORA
+// ═══════════════════════════════════════════════
+function calcEC2(instances) {
+  let total = 0;
+  instances.forEach(i => {
+    total += P.ec2[i.type].h * (i.hours * 30) * i.count;
+  });
+  return +total.toFixed(2);
+}
+
+function calcEBS(volumes) {
+  let total = 0;
+  volumes.forEach(v => { total += P.ebs[v.type] * v.size * v.count; });
+  return +total.toFixed(2);
+}
+
+function calcRDS(databases) {
+  let total = 0;
+  databases.forEach(db => {
+    const price = db.multiAZ ? P.rds[db.type].m : P.rds[db.type].s;
+    total += price * HOURS + P.rdsStorage * db.storage;
+  });
+  return +total.toFixed(2);
+}
+
+// ═══════════════════════════════════════════════
+// MOTOR DE REGLAS FINOPS
+// ═══════════════════════════════════════════════
+const T2T3 = { "t2.micro":"t3.micro","t2.small":"t3.small","t2.medium":"t3.medium","t2.large":"t3.large","t2.xlarge":"t3.xlarge" };
+const OVERSIZE = { "t3.xlarge":"t3.large","t3.large":"t3.medium","m5.xlarge":"m5.large","m5.2xlarge":"m5.xlarge","c5.xlarge":"c5.large","r5.xlarge":"r5.large" };
+
+function pct(saving, base) { return base > 0 ? +((saving/base)*100).toFixed(1) : 0; }
+
+function ruleT2toT3(instances) {
+  const aff = instances.filter(i => T2T3[i.type]);
+  if (!aff.length) return null;
+  let cur = 0, opt = 0;
+  aff.forEach(i => {
+    const h = i.hours * 30;
+    cur += P.ec2[i.type].h * h * i.count;
+    opt += P.ec2[T2T3[i.type]].h * h * i.count;
+  });
+  const saving = +(cur - opt).toFixed(2);
+  if (saving <= 0) return null;
+  const types = [...new Set(aff.map(i => i.type))].join(', ');
+  const count = aff.reduce((s,i) => s + i.count, 0);
+  return {
+    id: "t2_to_t3", sev: "high", cat: "compute",
+    title: `Upgrade ${count} instancia(s) de generación t2 a t3`,
+    desc: `Las instancias ${types} son de generación anterior (t2). La generación t3 ofrece el mismo RAM y más vCPU a menor precio gracias al Nitro Hypervisor. El cambio es transparente para la mayoría de workloads.`,
+    cur: +cur.toFixed(2), opt: +opt.toFixed(2), saving, pct: pct(saving, cur)
+  };
+}
+
+function ruleWeekend(instances) {
+  const aff = instances.filter(i => ["dev","staging"].includes(i.env) && i.hours >= 20);
+  if (!aff.length) return null;
+  const WF = 2/7;
+  let cur = 0, opt = 0;
+  aff.forEach(i => {
+    const c = P.ec2[i.type].h * 24 * 30 * i.count;
+    cur += c; opt += c * (1 - WF);
+  });
+  const saving = +(cur - opt).toFixed(2);
+  const count = aff.reduce((s,i) => s + i.count, 0);
+  const envs = [...new Set(aff.map(i => i.env))].join(', ');
+  return {
+    id: "weekend_shutdown", sev: "high", cat: "compute",
+    title: `Apagar ${count} instancia(s) de ${envs} los fines de semana`,
+    desc: `Las instancias de ${envs} no necesitan estar activas sábado y domingo. Con AWS Instance Scheduler o Lambda + EventBridge puedes automatizar el apagado/encendido. El ahorro equivale a 2 días menos de factura por semana (~28%).`,
+    cur: +cur.toFixed(2), opt: +opt.toFixed(2), saving, pct: pct(saving, cur)
+  };
+}
+
+function ruleGP2toGP3(volumes) {
+  const aff = volumes.filter(v => v.type === "gp2");
+  if (!aff.length) return null;
+  const gb = aff.reduce((s,v) => s + v.size * v.count, 0);
+  const cur = +(P.ebs.gp2 * gb).toFixed(2);
+  const opt = +(P.ebs.gp3 * gb).toFixed(2);
+  const saving = +(cur - opt).toFixed(2);
+  return {
+    id: "gp2_to_gp3", sev: "high", cat: "storage",
+    title: `Migrar ${aff.length} volumen(es) EBS de GP2 a GP3`,
+    desc: `GP3 es un 20% más barato que GP2 (${gb} GB en total) y ofrece 3.000 IOPS y 125 MB/s de base sin coste adicional. La migración en caliente se hace desde la consola AWS sin downtime.`,
+    cur, opt, saving, pct: pct(saving, cur)
+  };
+}
+
+function ruleReservedInstances(instances) {
+  const aff = instances.filter(i => i.env === "prod" && i.hours >= 20);
+  if (!aff.length) return null;
+  let cur = 0;
+  aff.forEach(i => { cur += P.ec2[i.type].h * HOURS * i.count; });
+  const opt = +(cur * (1 - P.riDiscount)).toFixed(2);
+  const saving = +(cur - opt).toFixed(2);
+  const count = aff.reduce((s,i) => s + i.count, 0);
+  return {
+    id: "reserved_instances", sev: "medium", cat: "commitment",
+    title: `Contratar Reserved Instances 1 año para ${count} instancia(s) de producción`,
+    desc: `Las instancias de producción corren 24/7. Con Reserved Instance de 1 año (sin pago inicial) obtienes un ${P.riDiscount*100}% de descuento sobre el precio On-Demand, sin cambiar ninguna configuración. Recomendado para cargas estables.`,
+    cur: +cur.toFixed(2), opt, saving, pct: pct(saving, cur)
+  };
+}
+
+function ruleRDSMultiAZ(databases) {
+  const aff = databases.filter(db => db.multiAZ && ["dev","staging"].includes(db.env));
+  if (!aff.length) return null;
+  let cur = 0, opt = 0;
+  aff.forEach(db => {
+    cur += P.rds[db.type].m * HOURS;
+    opt += P.rds[db.type].s * HOURS;
+  });
+  const saving = +(cur - opt).toFixed(2);
+  const envs = [...new Set(aff.map(db => db.env))].join(', ');
+  return {
+    id: "rds_multiaz", sev: "high", cat: "database",
+    title: `Desactivar Multi-AZ en ${aff.length} RDS de entorno ${envs}`,
+    desc: `Multi-AZ duplica el coste de RDS y está diseñado para alta disponibilidad en producción. En entornos ${envs} no se justifica. Desactivarlo no afecta al rendimiento, solo a la resiliencia ante fallos de zona.`,
+    cur: +cur.toFixed(2), opt: +opt.toFixed(2), saving, pct: pct(saving, cur)
+  };
+}
+
+function ruleRightsizing(instances) {
+  const aff = instances.filter(i => OVERSIZE[i.type] && ["dev","staging"].includes(i.env) && i.count === 1);
+  if (!aff.length) return null;
+  let cur = 0, opt = 0;
+  const details = [];
+  aff.forEach(i => {
+    const h = i.hours * 30;
+    cur += P.ec2[i.type].h * h;
+    opt += P.ec2[OVERSIZE[i.type]].h * h;
+    details.push(`${i.type} → ${OVERSIZE[i.type]}`);
+  });
+  const saving = +(cur - opt).toFixed(2);
+  if (saving <= 0) return null;
+  return {
+    id: "rightsizing", sev: "medium", cat: "compute",
+    title: `Right-sizing: reducir talla en ${aff.length} instancia(s) de desarrollo`,
+    desc: `Las instancias ${details.join(', ')} en entornos dev/staging probablemente están sobredimensionadas. Reducir una talla (half vCPU/RAM) suele ser suficiente para workloads de desarrollo. Verifica el uso medio de CPU antes de aplicar.`,
+    cur: +cur.toFixed(2), opt: +opt.toFixed(2), saving, pct: pct(saving, cur)
+  };
+}
+
+function runOptimizer(instances, volumes, databases) {
+  const ec2 = calcEC2(instances);
+  const ebs = calcEBS(volumes);
+  const rds = calcRDS(databases);
+  const total = +(ec2 + ebs + rds).toFixed(2);
+
+  const rules = [ruleT2toT3, ruleWeekend, ruleGP2toGP3, ruleReservedInstances, ruleRDSMultiAZ, ruleRightsizing];
+  const recs = rules.map(fn => {
+    try { return fn(instances, volumes, databases); } catch(e) { return null; }
+  }).filter(Boolean);
+  recs.sort((a,b) => b.saving - a.saving);
+
+  const totalSaving = +recs.reduce((s,r) => s + r.saving, 0).toFixed(2);
+  const optimized = +Math.max(0, total - totalSaving).toFixed(2);
+
+  return {
+    ec2, ebs, rds, total,
+    optimized, totalSaving,
+    savingPct: pct(totalSaving, total),
+    recs
+  };
+}
+
+// ═══════════════════════════════════════════════
+// UI
+// ═══════════════════════════════════════════════
+let ec2Cnt = 0, ebsCnt = 0, rdsCnt = 0;
+let chart = null;
+
+function sel(name, opts, val='') {
+  return `<select name="${name}">${opts.map(o => `<option value="${o}"${o===val?' selected':''}>${o}</option>`).join('')}</select>`;
+}
+
+function addEC2Row(d={}) {
+  const id = ++ec2Cnt;
+  const defs = { type:'t3.medium', count:1, hours:24, env:'prod', ...d };
+  const row = document.createElement('div');
+  row.className = 'resource-row ec2-row';
+  row.id = `ec2-${id}`;
+  row.innerHTML = `
+    <div class="row-field"><label>Tipo</label>${sel(`ec2-type-${id}`,EC2_TYPES,defs.type)}</div>
+    <div class="row-field"><label>Cant.</label><input type="number" name="ec2-count-${id}" min="1" max="500" value="${defs.count}"/></div>
+    <div class="row-field"><label>h/día</label><input type="number" name="ec2-hours-${id}" min="1" max="24" step=".5" value="${defs.hours}"/></div>
+    <div class="row-field"><label>Entorno</label>${sel(`ec2-env-${id}`,['prod','dev','staging'],defs.env)}</div>
+    <button class="btn-remove" onclick="removeRow('ec2-${id}')">✕</button>`;
+  document.getElementById('ec2-rows').appendChild(row);
+}
+
+function addEBSRow(d={}) {
+  const id = ++ebsCnt;
+  const defs = { type:'gp2', size:100, count:1, ...d };
+  const row = document.createElement('div');
+  row.className = 'resource-row ebs-row';
+  row.id = `ebs-${id}`;
+  row.innerHTML = `
+    <div class="row-field"><label>Tipo</label>${sel(`ebs-type-${id}`,EBS_TYPES,defs.type)}</div>
+    <div class="row-field"><label>Tamaño (GB)</label><input type="number" name="ebs-size-${id}" min="1" max="65536" value="${defs.size}"/></div>
+    <div class="row-field"><label>Cant.</label><input type="number" name="ebs-count-${id}" min="1" max="1000" value="${defs.count}"/></div>
+    <button class="btn-remove" onclick="removeRow('ebs-${id}')">✕</button>`;
+  document.getElementById('ebs-rows').appendChild(row);
+}
+
+function addRDSRow(d={}) {
+  const id = ++rdsCnt;
+  const defs = { type:'db.t3.medium', env:'prod', storage:50, multiAZ:false, ...d };
+  const row = document.createElement('div');
+  row.className = 'resource-row rds-row';
+  row.id = `rds-${id}`;
+  row.innerHTML = `
+    <div class="row-field"><label>Tipo RDS</label>${sel(`rds-type-${id}`,RDS_TYPES,defs.type)}</div>
+    <div class="row-field"><label>Entorno</label>${sel(`rds-env-${id}`,['prod','dev','staging'],defs.env)}</div>
+    <div class="row-field"><label>Storage (GB)</label><input type="number" name="rds-storage-${id}" min="20" max="65536" value="${defs.storage}"/></div>
+    <label class="row-check" style="grid-column:1/-2">
+      <input type="checkbox" name="rds-maz-${id}" ${defs.multiAZ?'checked':''} style="accent-color:var(--accent)"/>
+      Multi-AZ (alta disponibilidad)
+    </label>
+    <button class="btn-remove" onclick="removeRow('rds-${id}')">✕</button>`;
+  document.getElementById('rds-rows').appendChild(row);
+}
+
+function removeRow(id) { const el=document.getElementById(id); if(el) el.remove(); }
+
+function collectEC2() {
+  return [...document.querySelectorAll('.ec2-row')].map(row => {
+    const id = row.id.replace('ec2-','');
+    return {
+      type: row.querySelector(`[name="ec2-type-${id}"]`).value,
+      count: +row.querySelector(`[name="ec2-count-${id}"]`).value,
+      hours: +row.querySelector(`[name="ec2-hours-${id}"]`).value,
+      env: row.querySelector(`[name="ec2-env-${id}"]`).value,
+    };
+  });
+}
+function collectEBS() {
+  return [...document.querySelectorAll('.ebs-row')].map(row => {
+    const id = row.id.replace('ebs-','');
+    return {
+      type: row.querySelector(`[name="ebs-type-${id}"]`).value,
+      size: +row.querySelector(`[name="ebs-size-${id}"]`).value,
+      count: +row.querySelector(`[name="ebs-count-${id}"]`).value,
+    };
+  });
+}
+function collectRDS() {
+  return [...document.querySelectorAll('.rds-row')].map(row => {
+    const id = row.id.replace('rds-','');
+    return {
+      type: row.querySelector(`[name="rds-type-${id}"]`).value,
+      env: row.querySelector(`[name="rds-env-${id}"]`).value,
+      storage: +row.querySelector(`[name="rds-storage-${id}"]`).value,
+      multiAZ: row.querySelector(`[name="rds-maz-${id}"]`).checked,
+    };
+  });
+}
+
+function loadExample() {
+  ['ec2-rows','ebs-rows','rds-rows'].forEach(id => document.getElementById(id).innerHTML='');
+  ec2Cnt=0; ebsCnt=0; rdsCnt=0;
+  addEC2Row({type:'t2.medium',count:3,hours:24,env:'prod'});
+  addEC2Row({type:'t2.large', count:2,hours:24,env:'dev'});
+  addEC2Row({type:'m5.xlarge',count:1,hours:24,env:'staging'});
+  addEBSRow({type:'gp2',size:500,count:3});
+  addEBSRow({type:'gp2',size:200,count:2});
+  addRDSRow({type:'db.t3.medium',env:'dev',  storage:100,multiAZ:true});
+  addRDSRow({type:'db.t3.large', env:'prod', storage:200,multiAZ:false});
+}
+
+function runAnalysis() {
+  document.getElementById('error-box').classList.add('hidden');
+  const instances = collectEC2();
+  const volumes   = collectEBS();
+  const databases = collectRDS();
+
+  if (!instances.length && !volumes.length && !databases.length) {
+    showError('Añade al menos un recurso antes de analizar.');
+    return;
+  }
+  setBusy(true);
+
+  // Pequeño timeout para que el spinner se vea
+  setTimeout(() => {
+    try {
+      const data = runOptimizer(instances, volumes, databases);
+      renderResults(data);
+    } catch(e) {
+      showError('Error en el cálculo: ' + e.message);
+    }
+    setBusy(false);
+  }, 120);
+}
+
+function renderResults(data) {
+  document.getElementById('results-placeholder').classList.add('hidden');
+  document.getElementById('results-content').classList.remove('hidden');
+
+  document.getElementById('kpi-current').textContent   = fmt(data.total);
+  document.getElementById('kpi-optimized').textContent = fmt(data.optimized);
+  document.getElementById('kpi-saving').textContent    = fmt(data.totalSaving);
+  document.getElementById('kpi-pct').textContent       = `-${data.savingPct}% al mes`;
+
+  document.getElementById('breakdown-grid').innerHTML = `
+    <div class="breakdown-card"><div class="b-label">EC2 Compute</div><div class="b-value">${fmt(data.ec2)}</div></div>
+    <div class="breakdown-card"><div class="b-label">EBS Storage</div><div class="b-value">${fmt(data.ebs)}</div></div>
+    <div class="breakdown-card"><div class="b-label">RDS Database</div><div class="b-value">${fmt(data.rds)}</div></div>`;
+
+  renderChart(data);
+  renderRecs(data.recs);
+  document.getElementById('results-panel').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function renderChart(data) {
+  const ctx = document.getElementById('costChart').getContext('2d');
+  if (chart) chart.destroy();
+  const green = '#1a5c3b', greenA = 'rgba(26,92,59,.5)';
+  const red   = 'rgba(192,57,43,.5)', redB = '#c0392b';
+  const optC  = 'rgba(26,92,59,.7)';
+  chart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['EC2','EBS','RDS','Total Actual','Total Optimizado'],
+      datasets: [{
+        label: 'USD / mes',
+        data: [data.ec2, data.ebs, data.rds, data.total, data.optimized],
+        backgroundColor: [greenA, greenA, greenA, red, optC],
+        borderColor:     [green,  green,  green,  redB, green],
+        borderWidth: 1, borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => ` $${c.parsed.y.toFixed(2)}/mes` } }
+      },
+      scales: {
+        x: { grid: { color: 'rgba(216,208,196,.4)' }, ticks: { color: '#a89f94', font: { size: 11 } } },
+        y: { grid: { color: 'rgba(216,208,196,.4)' }, ticks: { color: '#a89f94', font: { size: 11 }, callback: v => `$${v}` }, beginAtZero: true }
+      }
+    }
+  });
+  document.getElementById('costChart').style.maxHeight = '210px';
+}
+
+function renderRecs(recs) {
+  const list = document.getElementById('rec-list');
+  const noRecs = document.getElementById('no-recs');
+  list.innerHTML = '';
+  if (!recs.length) { noRecs.classList.remove('hidden'); return; }
+  noRecs.classList.add('hidden');
+  const catLabel = { compute:'Compute', storage:'Storage', database:'Database', commitment:'Commitment' };
+  recs.forEach(r => {
+    const card = document.createElement('div');
+    card.className = `rec-card sev-${r.sev}`;
+    card.innerHTML = `
+      <div class="rec-header">
+        <div class="rec-title">${r.title}</div>
+        <div class="rec-saving">-${fmt(r.saving)}<small>-${r.pct}% este servicio</small></div>
+      </div>
+      <div class="rec-desc">${r.desc}</div>
+      <div class="rec-tags">
+        <span class="rec-tag tag-${r.cat}">${catLabel[r.cat]}</span>
+        <span class="rec-tag tag-${r.sev}">${r.sev.toUpperCase()}</span>
+      </div>`;
+    list.appendChild(card);
+  });
+}
+
+function fmt(v) { return '$' + (+v||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+function showError(msg) {
+  const box = document.getElementById('error-box');
+  box.textContent = msg; box.classList.remove('hidden');
+}
+
+function setBusy(busy) {
+  const btn = document.getElementById('btn-analyze');
+  btn.disabled = busy;
+  document.getElementById('btn-text').classList.toggle('hidden', busy);
+  document.getElementById('btn-loader').classList.toggle('hidden', !busy);
+}
+</script>
+</body>
+</html>
